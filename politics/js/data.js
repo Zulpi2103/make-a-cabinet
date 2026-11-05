@@ -14,7 +14,7 @@
 
   const COUNTRIES = {
     US: ['United States', 'North America'], CA: ['Canada', 'North America'], MX: ['Mexico', 'North America'],
-    CU: ['Cuba', 'North America'],
+    CU: ['Cuba', 'North America'], NI: ['Nicaragua', 'North America'], CR: ['Costa Rica', 'North America'],
     BR: ['Brazil', 'South America'], AR: ['Argentina', 'South America'], VE: ['Venezuela', 'South America'],
     CL: ['Chile', 'South America'], CO: ['Colombia', 'South America'], PE: ['Peru', 'South America'],
     UY: ['Uruguay', 'South America'], BO: ['Bolivia', 'South America'],
@@ -28,7 +28,8 @@
     IR: ['Iran', 'Asia'], SA: ['Saudi Arabia', 'Asia'], IN: ['India', 'Asia'], PK: ['Pakistan', 'Asia'],
     BD: ['Bangladesh', 'Asia'], CN: ['China', 'Asia'], TW: ['Taiwan', 'Asia'], JP: ['Japan', 'Asia'],
     KR: ['South Korea', 'Asia'], SG: ['Singapore', 'Asia'], ID: ['Indonesia', 'Asia'], PH: ['Philippines', 'Asia'],
-    VN: ['Vietnam', 'Asia'],
+    VN: ['Vietnam', 'Asia'], MM: ['Myanmar', 'Asia'], MY: ['Malaysia', 'Asia'],
+    LK: ['Sri Lanka', 'Asia'], TL: ['Timor-Leste', 'Asia'],
     EG: ['Egypt', 'Africa'], ZA: ['South Africa', 'Africa'], NG: ['Nigeria', 'Africa'], KE: ['Kenya', 'Africa'],
     GH: ['Ghana', 'Africa'], ET: ['Ethiopia', 'Africa'], TZ: ['Tanzania', 'Africa'], SN: ['Senegal', 'Africa'],
     BF: ['Burkina Faso', 'Africa'], CD: ['DR Congo', 'Africa'], LR: ['Liberia', 'Africa'], RW: ['Rwanda', 'Africa'],
@@ -484,6 +485,20 @@ Anwar Sadat|EG|c|2|8595374|President of Egypt, Nobel Peace laureate|1918–1981
 Hosni Mubarak|EG|c|3|6467383|President of Egypt|1928–2020
 Boutros Boutros-Ghali|EG|c|3|5393734|UN Secretary-General|1922–2016
 Abdel Fattah el-Sisi|EG|m|3|6558383|President of Egypt|b. 1954
+James Madison|US|h|2|7685955|4th US President, constitutional architect and Secretary of State|1751–1836
+Ruth Bader Ginsburg|US|m|2|4343927|US Supreme Court justice and advocate for women's legal equality|1933–2020
+Martin Luther King Jr.|US|c|1|7363729|Civil rights leader and Nobel Peace laureate|1929–1968
+Louis XIV|FR|h|1|9677684|King of France, known as the Sun King|1638–1715
+Vladimir Lenin|RU|h|1|8568666|Bolshevik leader and first head of the Soviet government|1870–1924
+Che Guevara|CU|c|1|5654286|Cuban revolutionary, guerrilla commander and Minister of Industries|1928–1967
+Desmond Tutu|ZA|c|2|6373828|Archbishop and chair of South Africa's Truth and Reconciliation Commission|1931–2021
+Gough Whitlam|AU|c|2|7574759|Prime Minister of Australia who introduced universal health care|1916–2014
+Aung San Suu Kyi|MM|m|2|6474526|State Counsellor and Foreign Minister of Myanmar|b. 1945
+Mahathir Mohamad|MY|c|2|8878477|Malaysian Prime Minister, former Finance, Home and Education Minister|b. 1925
+Sirimavo Bandaranaike|LK|c|2|7575477|World's first female Prime Minister, Sri Lankan Defence and External Affairs Minister|1916–2000
+José Ramos-Horta|TL|m|2|7594466|President, Prime Minister and Foreign Minister of Timor-Leste|b. 1949
+Violeta Chamorro|NI|c|2|7674565|First female President of Nicaragua|1929–2025
+Óscar Arias|CR|c|2|7794536|President of Costa Rica and Nobel Peace laureate for Central American peace efforts|b. 1940|Óscar Arias
 `;
 
   const SEAT_ORDER = 'LEFIJDS';
@@ -497,6 +512,17 @@ Abdel Fattah el-Sisi|EG|m|3|6558383|President of Egypt|b. 1954
 
   // Neutral descriptions, shown while Experience hints are off: these roles would give away the seat fit.
   const NEUTRAL = {
+    "James Madison": "4th President of the United States",
+    "Ruth Bader Ginsburg": "American public figure known as RBG",
+    "Martin Luther King Jr.": "American public figure and Nobel laureate",
+    "Che Guevara": "Cuban revolutionary and political figure",
+    "Desmond Tutu": "South African archbishop and Nobel laureate",
+    "Gough Whitlam": "Prime Minister of Australia",
+    "Aung San Suu Kyi": "State Counsellor of Myanmar",
+    "Mahathir Mohamad": "Prime Minister of Malaysia",
+    "Sirimavo Bandaranaike": "World's first female Prime Minister",
+    "José Ramos-Horta": "President and Prime Minister of Timor-Leste",
+    "Óscar Arias": "President of Costa Rica and Nobel laureate",
     "Alexander Hamilton": "Founding Father of the United States",
     "Benjamin Franklin": "Founding Father of the United States",
     "Ulysses S. Grant": "18th President of the United States",
@@ -632,7 +658,8 @@ Abdel Fattah el-Sisi|EG|m|3|6558383|President of Egypt|b. 1954
     'Earl Warren': 'Earl Warren', 'Elizabeth Warren': 'E. Warren', 'Klemens von Metternich': 'Metternich',
     'Suleiman the Magnificent': 'Suleiman', 'Franklin D. Roosevelt': 'FDR', 'John F. Kennedy': 'JFK',
     'Robert F. Kennedy': 'RFK', 'Lyndon B. Johnson': 'LBJ', 'Mohammed bin Salman': 'MBS',
-    'Javier Pérez de Cuéllar': 'Pérez de Cuéllar',
+    'Javier Pérez de Cuéllar': 'Pérez de Cuéllar', 'Martin Luther King Jr.': 'MLK',
+    'Aung San Suu Kyi': 'Suu Kyi', 'Mahathir Mohamad': 'Mahathir',
   };
   const PARTICLES = new Set(['de', 'da', 'di', 'von', 'van', 'der', 'del', 'la', 'le', 'De', 'Van', 'bin', 'el']);
   const SURNAME_FIRST = new Set(['CN', 'TW', 'KR']);
