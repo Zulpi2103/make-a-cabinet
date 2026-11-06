@@ -5,8 +5,13 @@
    Skills: seven digits, 1–9, one per seat in the order
            Leader, Economy, Foreign Affairs, Interior (police, borders), Justice (law, courts),
            Defence, Social Affairs (health, education, welfare).
-           9 = defining career there, 6–7 = real experience, 4–5 = useful background, 2–3 = little.
-           A rating of 7 or more counts as "real experience" (the fit shown with hints on). */
+           8–9 = exceptional relevant record, 6–7 = substantial ability/experience,
+           4–5 = transferable background, 1–3 = limited relevant experience.
+           These are approximate game-design judgments of domain capability, not virtue,
+           regime type, fame, or time in office. Justice means legal/institutional skill;
+           Interior means security/administrative coordination, not democratic credentials.
+           A rating of 7 or more counts as "real experience" (the fit shown with hints on).
+   Deliberate roster exclusions remain: Adolf Hitler, Joseph Stalin, Mao Zedong, Pol Pot. */
 (function () {
   'use strict';
 
@@ -37,6 +42,15 @@
     AU: ['Australia', 'Oceania'], NZ: ['New Zealand', 'Oceania'],
   };
 
+  // Focused effectiveness audit: RFK's crisis diplomacy warrants F7; Ginsburg's
+  // outstanding legal career remains J9, with transferable S5; King's organizing
+  // and antipoverty work warrant S7, with transferable J5 rather than court expertise.
+  // https://microsites.jfklibrary.org/cmc/oct23/doc1.html
+  // https://www.supremecourt.gov/about/biographyginsburg.aspx
+  // https://kinginstitute.stanford.edu/introduction
+  // https://kinginstitute.stanford.edu/poor-peoples-campaign
+  // Existing specialist strengths such as Putin/Xi I9 and Deng E9 are retained;
+  // strength in one domain does not raise unrelated skills or endorse its use.
   const RAW = `
 George Washington|US|h|1|9566594|1st President of the United States|1732–1799
 John Adams|US|h|3|6484744|2nd President of the United States|1735–1826
@@ -52,7 +66,7 @@ Eleanor Roosevelt|US|c|2|5483629|First Lady and UN human-rights diplomat|1884–
 Harry S. Truman|US|c|2|7575476|33rd President of the United States|1884–1972
 Dwight D. Eisenhower|US|c|1|8575495|34th US President and WWII Supreme Commander|1890–1969
 John F. Kennedy|US|c|1|8575466|35th President of the United States|1917–1963
-Robert F. Kennedy|US|c|2|5356836|US Attorney General|1925–1968
+Robert F. Kennedy|US|c|2|5376836|US Attorney General|1925–1968
 Lyndon B. Johnson|US|c|2|8645759|36th US President, signed the Civil Rights Act|1908–1973
 Robert McNamara|US|c|3|4653384|US Secretary of Defense|1916–2009
 Earl Warren|US|c|3|6336936|Governor of California and Chief Justice|1891–1974
@@ -486,8 +500,8 @@ Hosni Mubarak|EG|c|3|6467383|President of Egypt|1928–2020
 Boutros Boutros-Ghali|EG|c|3|5393734|UN Secretary-General|1922–2016
 Abdel Fattah el-Sisi|EG|m|3|6558383|President of Egypt|b. 1954
 James Madison|US|h|2|7685955|4th US President, constitutional architect and Secretary of State|1751–1836
-Ruth Bader Ginsburg|US|m|2|4343927|US Supreme Court justice and advocate for women's legal equality|1933–2020
-Martin Luther King Jr.|US|c|1|7363729|Civil rights leader and Nobel Peace laureate|1929–1968
+Ruth Bader Ginsburg|US|m|2|4343925|US Supreme Court justice and advocate for women's legal equality|1933–2020
+Martin Luther King Jr.|US|c|1|7363527|Civil rights leader and Nobel Peace laureate|1929–1968
 Louis XIV|FR|h|1|9677684|King of France, known as the Sun King|1638–1715
 Vladimir Lenin|RU|h|1|8568666|Bolshevik leader and first head of the Soviet government|1870–1924
 Che Guevara|CU|c|1|5654286|Cuban revolutionary, guerrilla commander and Minister of Industries|1928–1967

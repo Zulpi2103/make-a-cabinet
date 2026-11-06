@@ -113,6 +113,7 @@ function showdownFixture(options = {}) {
   assert(h.act(h.host, { t: 'next' }));
   assert.equal(h.S.phase, 'briefing');
   assert(h.act(h.host, { t: 'next' }));
+  while (h.S.phase === 'choose') assert(h.act(h.S.choiceTurn, { t: 'chooseCrisis', ci: h.E.bestCrisis(h.S, h.S.choiceTurn) }));
   return h;
 }
 function finishGame(h, max = 60000) {
@@ -131,6 +132,8 @@ function finishGame(h, max = 60000) {
     } else if (S.phase === 'assign' && !h.E.player(S, S.sold.by).bot) {
       const seat = S.teams[S.sold.by].seats.findIndex(x => x === null);
       assert(h.act(S.sold.by, { t: 'seat', seat }));
+    } else if (S.phase === 'choose' && !h.E.player(S, S.choiceTurn).bot) {
+      assert(h.act(S.choiceTurn, { t: 'chooseCrisis', ci: h.E.bestCrisis(S, S.choiceTurn) }));
     } else if (S.phase === 'respond' && !h.E.player(S, S.responseTurn).bot) {
       const d = S.duels[S.di], id = S.responseTurn;
       const seats = h.CC.SK.map((_, i) => i).filter(i => !d.used[id].includes(i)).slice(0, 2);
@@ -163,7 +166,7 @@ function finishGame(h, max = 60000) {
       for (const c of d.r.crises) for (const side of ['A', 'B']) {
         assert([0, 1, 2].includes(c[side].roll));
         assert.equal(c[side].parts.length, 2);
-        assert.equal(c[side].tot, c[side].parts.reduce((sum, p) => sum + p.v, 0) + c[side].roll);
+        assert.equal(c[side].tot, c[side].parts.reduce((sum, p) => sum + p.v, 0) + c[side].rapport + c[side].roll);
       }
       a.cw += d.r.wa; b.cw += d.r.wb;
     }

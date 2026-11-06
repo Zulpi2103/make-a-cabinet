@@ -16,8 +16,9 @@
   const app = {
     view: 'home', role: null, S: null, me: [], offset: 0, code: '', err: '', toast: '',
     name: LS.get('cc-name', ''), joinCode: '', csearch: '', addName: '', modal: null, ptab: 'serious',
-    pundBusy: false, pundErr: '', pundProgress: '', lost: false, tokens: {}, loop: null, joinTimer: null,
+    pundBusy: false, pundErr: '', pundProgress: '', pundRequest: null, lost: false, tokens: {}, loop: null, joinTimer: null,
     ballot: [], sig: {}, netDown: false, responseDraft: { key: '', seats: [] },
+    reference: { query: '', country: '', seat: '', sort: 'name', page: 0 }, profile: null,
     sample: ['Alex', 'Sam', 'Robin', 'Charlie', 'Jordan', 'Kim', 'Max', 'Nova', 'Riley', 'Luca', 'Mila', 'Toni'][Math.floor(Math.random() * 12)],
   };
 
@@ -90,10 +91,11 @@
         <span class="cr" title="Credits left">${t.cr}<small>cr</small></span></header>
       <div class="crbar"><i style="width:${Math.min(100, (t.cr / S.settings.budget) * 100)}%"></i></div>
       <ul>${SEATS.map((s, i) => `<li class="${opts.hl && opts.hl.includes(s.k) ? 'hl' : ''}"><span class="si" title="${esc(s.name)}">${s.icon}</span>${t.seats[i] != null ? mini(t.seats[i], s.k, (t.buys.find((b) => b.seat === i) || {}).v) : `<span class="vac">${esc(s.name)}</span>`}</li>`).join('')}</ul>
-      ${revealed() ? `<footer><button class="power" data-a="bonus" title="How Power is counted">Power <b>${E.power(t.seats)}</b></button>${chem.map((c) => `<button class="chem" data-a="bonus" title="What is this bonus?">${esc(c.label)} +${c.v}</button>`).join('')}</footer>` : ''}
+      ${revealed() ? `<footer><button class="power" data-a="bonus" title="How Power is counted">Power <b>${E.power(t.seats)}</b></button>${chem.map((c) => `<button class="chem" data-a="bonus" title="What is this bonus?">${esc(c.label)} ${signed(c.v)}</button>`).join('')}</footer>` : ''}
     </div>`;
   }
   const cabs = (ids, opts) => `<section class="cabs n${ids.length}">${ids.map((id) => cabinet(id, opts)).join('')}</section>`;
+  const signed = (v) => v > 0 ? `+${v}` : String(v);
   const fuse = (S) => (S.deadline ? `<div class="fuse" data-dl="${S.deadline}" data-dur="${S.dur}"><i></i><span class="secs"></span></div>` : '');
   const chip = (on, a, attrs, label, dis) => `<button class="chip ${on ? 'on' : ''}" data-a="${a}" ${attrs} ${dis ? 'disabled' : ''}>${label}</button>`;
 
@@ -110,19 +112,21 @@
     </header>`;
   }
   function modal() {
+    if (app.modal === 'profile') return profileModal();
     if (app.modal === 'rules') {
       return `<div class="modal" data-a="closeModal"><div class="sheet" data-stop>
         <h2>How to play</h2>
         <ol class="rules">
           <li><b>Pick a deck.</b> Choose countries, continents, fame or a historical period. Each player needs ${SEATS.length} politicians.</li>
-          <li><b>Buy your cabinet.</b> Spend ${app.S ? app.S.settings.budget : 30} credits across ${SEATS.length} ministries: ${SEATS.map((s) => `${s.icon} ${s.name}`).join(', ')}. Every bid restarts the timer. Highest bid wins; choose a vacant ministry for your purchase.</li>
+          <li><b>Buy your cabinet.</b> Spend ${app.S ? app.S.settings.budget : 30} credits across ${SEATS.length} ministries: ${SEATS.map((s) => `${s.icon} ${s.name}`).join(', ')}. Every bid restarts the timer. Highest bid wins; choose a vacant ministry for your purchase. Raise by +1, +2, +5 or +10, or go All in. In single-player controls, keys 1/2/5/0 raise, M goes All in and P passes.</li>
           <li><b>All in means all in.</b> You can spend every credit. With zero left, wait while the others finish bidding. Only when nobody with vacant seats can pay does free recruitment begin: random remaining politicians fill the vacancies, and you choose their ministries. No borrowing or duplicate recruits.</li>
           <li><b>Nobody bids?</b> Discard the politician while discards remain. After that, a random player with a vacancy and at least 1 credit pays 1. When the fresh deck runs out, discards return and cannot be skipped again. Free recruitment can draw from both remaining cards and discards.</li>
-          <li><b>Skills and assignments.</b> Each person has seven career-based skill ratings, from 1 to 9. Cabinet Power adds each minister's assigned skill, +1 for a household name, and cabinet bonuses. Ratings are game judgments, not a moral ranking. Experience hints are optional and off by default; ratings and fit stay hidden during recruitment.</li>
-          <li><b>Choose a crisis response.</b> Each duel shows three crisis cards. Take turns sending two different ministers to each one. A minister can respond only once per duel; save specialists for later cards. Choices are public, and the first chooser alternates. You have 45 seconds; the game chooses for you on timeout.</li>
-          <li><b>Response score.</b> For each selected minister: twice the primary skill + the supporting skill; add +3 for holding the primary ministry or +2 for the supporting ministry; add +2 for the card's country or +1 for its continent; add +1 for its era. Add the two ministers, then one luck roll of 0–2. The card shows its setting and skills; its scenario is fictional. <b>Cabinet Power and chemistry are not added to this score.</b></li>
+          <li><b>Skills and assignments.</b> Each person has seven career-based skill ratings, from 1 to 9. Relevant ability counts; democracy, regime type and moral reputation have no automatic multiplier. Cabinet Power adds each minister's assigned skill, +1 for a household name, and cabinet bonuses. Ratings are game judgments, not a moral ranking. Experience hints are optional and off by default; ratings and fit stay hidden during recruitment.</li>
+          <li><b>Choose situations, then responses.</b> Five distinct crisis cards are dealt publicly: two offers per player and one neutral card. Each player chooses one offer in turn (45 seconds); those two picks plus the neutral card form the three-crisis duel. Take turns sending two different ministers to each one. A minister can respond only once per duel; save specialists for later cards. Choices are public, and the first chooser alternates. You have 45 seconds; the game chooses for you on timeout.</li>
+          <li><b>Response score.</b> For each selected minister: twice the primary skill + the supporting skill; add +3 for holding the primary ministry or +2 for the supporting ministry; add +2 for the card's country or +1 for its continent; add +1 for its era. Add the two ministers, a context-relevant ally/rival modifier of +2/−2 if the selected pair is listed in the bonus guide, then one luck roll of 0–2. The card shows its setting and skills; its scenario is fictional. <b>Whole-cabinet Power and its bonuses are not added to this score.</b> The selected pair’s working relationship is checked separately.</li>
           <li><b>Win the tournament.</b> Higher response score wins a crisis; equal scores tie. More crisis wins takes the duel: <b>3 tournament points for a win, 1 each for a draw</b>. Tied standings use crisis wins, then cabinet Power, then unspent credits. Alternatively, use <i>Argue &amp; vote</i> to decide duels together.</li>
-          <li><b>The Pundit</b> evaluates and roasts the completed cabinets. Its verdict does not award tournament points. <button class="lnk" data-a="bonus">Power &amp; cabinet bonuses →</button></li>
+          <li><b>Keep the room going.</b> Play again retains cumulative tournament points, games won and games played. An exact tie after every game tie-breaker gives each co-winner one win. The record lasts for this room session; departed players remain listed.</li>
+          <li><b>The Pundit</b> evaluates and roasts the completed cabinets. Both options use the same skill, fit and Power-based rating; AI supplies commentary. Its verdict does not award tournament points. <button class="lnk" data-a="bonus">Power &amp; cabinet bonuses →</button></li>
         </ol>
         <button class="btn" data-a="closeModal">Got it</button>
       </div></div>`;
@@ -163,12 +167,17 @@
       <h2>Power &amp; cabinet bonuses</h2>
       <p><b>Cabinet Power</b> = the seven assigned skill ratings (1–9 each), +1 per household name (★★★), plus the bonuses below. It describes the cabinet and breaks tied tournament standings after crisis wins. It is <b>not</b> a crisis response score or tournament points.</p>
       <table class="btable">
-        <tr><td>🏳️</td><td><b>Country united</b><small>3 or more ministers from the same country</small></td><td>+1 / +2 / +3<small>for 3 / 4 / 5 or more ministers</small></td></tr>
+        <tr><td>🏳️</td><td><b>Shared country context</b><small>3 or more ministers from the same country</small></td><td>+1 / +2 / +3<small>for 3 / 4 / 5 or more ministers</small></td></tr>
         <tr><td>🌍</td><td><b>Global coalition</b><small>Ministers from 4 or more continents</small></td><td>+2<small>for 4 or more continents</small></td></tr>
         <tr><td>⏳</td><td><b>Era dream team</b><small>All ${SEATS.length} from one era: before 1945, 1945–1999 or the 21st century</small></td><td>+2</td></tr>
         <tr><td>🧩</td><td><b>Perfect fit</b><small>All ${SEATS.length} ministers have an assigned skill of at least 7</small></td><td>+3</td></tr>
+        <tr><td>🤝</td><td><b>Working relationships</b><small>Each listed pair: +1 ally / −1 rival when either holds a listed ministry</small></td><td>−2 to +2<small>combined cabinet limit</small></td></tr>
       </table>
       <p class="small">Bonuses stack — a cabinet can earn several at once. ${S && S.settings && !S.settings.hints ? 'With Experience hints off, Power and bonuses appear when the cabinets are sworn in.' : ''}</p>
+      <h3>Cooperation depends on the job</h3>
+      <p class="small">Country and era already reward shared background. Only these documented working relationships add a separate effect. In a crisis, both people must be sent together and either required skill must match the listed context: +2 for allies or −2 for rivals. Cabinet rapport is not added again. These small game modifiers are interpretations of cooperation, not claims that every joint policy succeeded.</p>
+      <ul class="relationship-list">${CC.RELATIONSHIPS.map((r) => `<li><b>${esc(r.a)} &amp; ${esc(r.b)}</b> · ${r.kind === 'ally' ? 'allies' : 'rivals'}<small>Context: ${r.skills.map((k) => esc(DIMENSIONS.find((s) => s.k === k).name)).join(', ')}. ${esc(r.note)} <a href="${esc(r.source)}" target="_blank" rel="noopener noreferrer">Historical source ↗</a></small></li>`).join('')}</ul>
+      <p class="small">There is no blanket democracy, authoritarianism or ideology bonus. Several powerful leaders do not automatically cooperate well.</p>
       ${progress}
       <div class="row"><button class="btn" data-a="closeModal">Got it</button></div>
     </div></div>`;
@@ -199,14 +208,72 @@
         <div><b>1</b><h3>Pick a deck</h3><p>Legends, the world, your own mix of countries, continents, modern leaders or history.</p></div>
         <div><b>2</b><h3>Bid for ministers</h3><p>Live auction with a ticking timer. ${D.POLS.length} real politicians, seven ministries, limited credits. Go all in if you dare.</p></div>
         <div><b>3</b><h3>Survive the crises</h3><p>Choose which ministers tackle each crisis. Save specialists for later — or argue it out and vote.</p></div>
-        <div><b>4</b><h3>Face the pundit</h3><p>An AI rates every government, then roasts them against each other.</p></div>
+        <div><b>4</b><h3>Face the pundit</h3><p>Get a skill-based verdict and a roast of every cabinet.</p></div>
       </section>
       <section class="ballot">
         <h2>On today's ballot</h2>
         <div class="ballot-row">${app.ballot.map((i) => { const f = pol(i); return `<div class="bcard">${portrait(f, 'md')}<b>${esc(f.n)}</b><small>${flag(f.c, 'sm')} ${esc(f.r)}</small></div>`; }).join('')}</div>
       </section>
+      <section class="reference-entry panel"><div><h2>Who's who</h2><p>Browse all ${D.POLS.length} politicians, their careers and seven skill ratings.</p></div><button class="btn ghost" data-a="reference">Open the reference →</button></section>
       <footer class="foot">A party game about real politicians. Not an endorsement of anyone. Portraits from Wikipedia; flags from flagcdn.</footer>
     </main>`;
+  }
+  // The reference deliberately reveals ratings, independently of in-game hints.
+  const DIMENSIONS = [
+    { k: 'L', name: 'Leader', desc: 'Leadership, organizing and governing' },
+    { k: 'E', name: 'Economy', desc: 'Economic and financial policy' },
+    { k: 'F', name: 'Foreign Affairs', desc: 'Diplomacy and international relations' },
+    { k: 'I', name: 'Interior', desc: 'Domestic administration and state coordination' },
+    { k: 'J', name: 'Justice', desc: 'Law, courts and legal institutions' },
+    { k: 'D', name: 'Defence', desc: 'Military strategy and defence administration' },
+    { k: 'S', name: 'Social Affairs', desc: 'Health, education and social welfare' },
+  ];
+  const fold = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const bestRating = (f) => Math.max(...DIMENSIONS.map((s) => f.sk[s.k]));
+  const bestSeats = (f) => DIMENSIONS.filter((s) => f.sk[s.k] === bestRating(f));
+  function referenceList() {
+    const r = app.reference, q = fold(r.query.trim());
+    const fs = D.POLS.filter((f) => (!q || fold(`${f.n} ${f.r} ${D.COUNTRIES[f.c].name}`).includes(q))
+      && (!r.country || f.c === r.country) && (!r.seat || bestSeats(f).some((s) => s.k === r.seat)));
+    const byName = (a, b) => a.n.localeCompare(b.n);
+    fs.sort((a, b) => (r.sort === 'country' ? D.COUNTRIES[a.c].name.localeCompare(D.COUNTRIES[b.c].name)
+      : r.sort === 'fame' ? a.t - b.t : r.sort === 'skill' ? bestRating(b) - bestRating(a) : 0) || byName(a, b));
+    return fs;
+  }
+  function vReference() {
+    const r = app.reference, fs = referenceList(), pages = Math.max(1, Math.ceil(fs.length / 24));
+    r.page = Math.max(0, Math.min(r.page, pages - 1));
+    CC.Img.prefetch(fs.slice(r.page * 24, r.page * 24 + 24));
+    const countries = [...new Set(D.POLS.map((f) => f.c))].sort((a, b) => D.COUNTRIES[a].name.localeCompare(D.COUNTRIES[b].name));
+    const option = (value, label, selected) => `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(label)}</option>`;
+    return topbar('The reference') + `<main class="reference"><button class="lnk" data-a="home">← Back to home</button>
+      <h1 class="h1">Who's who</h1><p class="lead">Every politician in the game, whatever deck you choose.</p>
+      <p>Ratings estimate relevant ability and career experience, not democratic virtue or moral worth. A high score in one field does not imply competence in every ministry. They are approximate game judgments, not historical measurements.</p>
+      <p class="small">This reference openly shows all seven ratings. During recruitment, the separate Experience hints setting still controls visibility. “Best seat” includes every tied highest skill.</p>
+      <section class="reference-filters panel" aria-label="Reference filters">
+        <label>Search<input id="rq" type="search" placeholder="Name, role or country" value="${esc(r.query)}"></label>
+        <label>Country<select id="rc">${option('', 'All countries', r.country)}${countries.map((c) => option(c, D.COUNTRIES[c].name, r.country)).join('')}</select></label>
+        <label>Best seat<select id="rs">${option('', 'All seats', r.seat)}${DIMENSIONS.map((s) => option(s.k, s.name, r.seat)).join('')}</select></label>
+        <label>Sort by<select id="ro">${[['name','Name'],['country','Country'],['fame','Fame'],['skill','Highest skill']].map(([v,l]) => option(v,l,r.sort)).join('')}</select></label>
+        <button class="btn small ghost" data-a="resetReference">Reset</button>
+      </section>
+      <p class="small reference-count" aria-live="polite">${fs.length} of ${D.POLS.length} politicians · page ${r.page + 1} of ${pages}</p>
+      <section class="reference-grid">${fs.slice(r.page * 24, r.page * 24 + 24).map((f) => `<button class="reference-card" data-a="profile" data-id="${f.i}">${portrait(f, 'md')}<span><b>${esc(f.n)}</b><small>${flag(f.c, 'sm')} ${esc(D.COUNTRIES[f.c].name)}</small><small>${esc(f.r)}</small><small>Best: ${bestSeats(f).map((s) => esc(s.name)).join(' / ')} · ${bestRating(f)}/9</small></span></button>`).join('') || '<p>No matches. Try another search or reset the filters.</p>'}</section>
+      <nav class="reference-pages" aria-label="Reference pages"><button class="btn ghost" data-a="referencePage" data-page="${r.page - 1}" ${r.page === 0 ? 'disabled' : ''}>← Previous</button><span>${r.page + 1} / ${pages}</span><button class="btn ghost" data-a="referencePage" data-page="${r.page + 1}" ${r.page + 1 >= pages ? 'disabled' : ''}>Next →</button></nav>
+    </main>`;
+  }
+  function profileModal() {
+    const f = pol(app.profile);
+    if (!f) return '';
+    return `<div class="modal" data-a="closeModal"><article class="sheet profile" data-stop role="dialog" aria-modal="true" aria-labelledby="profile-name">
+      <div class="profile-header">${portrait(f, 'md')}<div><h2 id="profile-name">${esc(f.n)}</h2><p>${flag(f.c)} ${esc(D.COUNTRIES[f.c].name)} · ${CC.ERAS[f.e]}</p></div></div>
+      <p><b>${esc(f.r)}</b></p><p>${esc(f.y)}</p>${stars(f.t)}
+      <h3>Career skills · 1–9</h3><div class="skill-bars">${DIMENSIONS.map((s) => {
+        const active = SEATS.some((seat) => seat.k === s.k);
+        return `<div class="skill-row ${active ? '' : 'inactive'}"><label for="skill-${s.k}">${esc(s.name)}${active ? '' : ' · inactive seat'}<small>${esc(s.desc)}</small></label><meter id="skill-${s.k}" min="0" max="9" value="${f.sk[s.k]}">${f.sk[s.k]}/9</meter><b>${f.sk[s.k]}/9</b></div>`;
+      }).join('')}</div><p class="small">Experience and capability estimates, not approval of the person or their politics. Ratings of 7–9 count as an experienced fit.</p>
+      <button class="btn" data-a="closeModal">Back to the list</button>
+    </article></div>`;
   }
   function vConnecting() {
     return topbar() + `<main class="center"><div class="spin"></div><p>${app.role === 'host' ? 'Opening your room…' : `Joining room <b>${esc(app.code)}</b>…`}</p><button class="btn ghost" data-a="home">Cancel</button></main>`;
@@ -265,7 +332,7 @@
       <h3>Discards allowed</h3><div class="chips">${[0, 3, 5, 10, -1].map((v) => chip(st.discards === v, 'set', `data-k="discards" data-v="${v}"`, v < 0 ? 'No limit' : v, !adm)).join('')}</div>
       <p class="small">${st.discards < 0 ? 'Unwanted politicians are always discarded (until the deck runs dry).' : 'After that, a random player who can pay and has a vacancy recruits them for 1 credit.'}</p>
       ${solo ? '' : `<h3>Who wins a duel?</h3><div class="chips">${chip(st.judge === 'crisis', 'set', 'data-k="judge" data-v="crisis"', '🃏 Crisis responses', !adm)}${chip(st.judge === 'vote', 'set', 'data-k="judge" data-v="vote"', '🗣️ Argue &amp; vote', !adm)}</div>
-      <p class="small">${st.judge === 'crisis' ? 'Choose two ministers per crisis, each usable once per duel. Three visible cards, career skills, small background bonuses and 0–2 luck.' : 'The two players defend their cabinets out loud; everyone else votes.'}</p>`}
+      <p class="small">${st.judge === 'crisis' ? 'Choose two ministers per crisis, each usable once per duel. Choose one of two offered cards each, then play those picks and one neutral card. Career skills, small context modifiers and 0–2 luck.' : 'The two players defend their cabinets out loud; everyone else votes.'}</p>`}
       <h3>Experience hints</h3><div class="chips">${chip(!st.hints, 'set', 'data-k="hints" data-v="0"', 'Off · trust your knowledge', !adm)}${chip(!!st.hints, 'set', 'data-k="hints" data-v="1"', 'On · show who fits where', !adm)}</div>
       <p class="small">${st.hints ? 'Cards show all seven skill ratings and live cabinet Power.' : 'Seat fit and scores stay secret until the cabinets are sworn in.'}</p>
       <h3>Showdown length</h3><div class="chips">${chip(st.rounds === 'all', 'set', 'data-k="rounds" data-v="all"', 'Everyone vs everyone', !adm)}${chip(st.rounds === 'quick', 'set', 'data-k="rounds" data-v="quick"', 'Quick · 3 rounds', !adm)}</div>`;
@@ -292,6 +359,7 @@
           ${rules}
         </section>
       </div>
+      ${roomLeaderboard()}
       <div class="start-row">
         ${problem ? `<p class="err">${esc(problem)}</p>` : ''}
         ${adm ? `<button class="btn big" data-a="start" ${problem ? 'disabled' : ''}>Start the auction →</button>` : '<p class="muted">The host will start the game.</p>'}
@@ -308,9 +376,9 @@
     if (S.passed.includes(pid)) return `<div class="bc muted">${label}<span>Passed on this one</span></div>`;
     const cur = S.bid ? S.bid.v : 0, mx = E.maxBid(S, pid);
     if (mx <= cur) return `<div class="bc muted">${label}<span>Can't outbid — your max is ${mx}</span><button class="btn small ghost" data-a="pass" data-p="${pid}">Pass</button></div>`;
-    const opts = [...new Set([cur + 1, cur + 2, cur + 5, mx])].filter((v) => v <= mx).sort((a, b) => a - b);
-    return `<div class="bc">${label}<div class="bids">${opts.map((v) => `<button class="bidb ${v === mx ? 'max' : ''}" data-a="bid" data-p="${pid}" data-v="${v}"><b>${v}</b><small>${v === mx ? 'all in' : cur ? '+' + (v - cur) : v === 1 ? 'credit' : 'credits'}</small></button>`).join('')}
-      <button class="passb" data-a="pass" data-p="${pid}">Pass</button></div>${compact ? '' : `<p class="keys">Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>5</kbd> raise · <kbd>M</kbd> max · <kbd>P</kbd> pass · max bid ${mx}. All in leaves zero credits; vacancies are filled free after paid bidding ends.</p>`}</div>`;
+    const opts = [...new Set([cur + 1, cur + 2, cur + 5, cur + 10, mx])].filter((v) => v <= mx).sort((a, b) => a - b);
+    return `<div class="bc">${label}<div class="bids">${opts.map((v) => `<button class="bidb ${v === mx ? 'max' : ''}" data-a="bid" data-p="${pid}" data-v="${v}"><b>${v}</b><small>${v === mx ? 'all in' : '+' + (v - cur)}</small></button>`).join('')}
+      <button class="passb" data-a="pass" data-p="${pid}">Pass</button></div>${compact ? '' : `<p class="keys">Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>5</kbd> raise · <kbd>0</kbd> +10 · <kbd>M</kbd> max · <kbd>P</kbd> pass · max bid ${mx}. All in leaves zero credits; vacancies are filled free after paid bidding ends.</p>`}</div>`;
   }
   function stagePanel() {
     const S = app.S;
@@ -406,7 +474,7 @@
   function vCabinets() {
     const S = app.S;
     const how = S.settings.judge === 'crisis'
-      ? 'See three crises, then choose two ministers for each. Each minister responds once per duel. Relevant skills, assigned ministries and the card’s setting drive the score; luck adds only 0–2.'
+      ? 'Choose one of two offered crises each; play those two picks plus a neutral card. Send two ministers to each. Each minister responds once per duel. Relevant skills, assigned ministries and the card’s setting drive the score; luck adds only 0–2.'
       : 'Each duel, the two players defend their cabinets out loud — then everyone else votes.';
     return topbar('All seats filled') + `<main class="sworn">
       <h1 class="h1">The cabinets are sworn in</h1>
@@ -432,7 +500,11 @@
       <small>Skills: ${f.sk[cr.p]} × 2 + ${f.sk[cr.q]} = ${part.ability} · ministry +${part.portfolio} · geography +${part.geography} · era +${part.era} <strong>= ${part.v}</strong></small></div>`;
   }
   function scoreBreakdown(side, cr) {
-    return side.parts.map((part) => responsePart(part, cr)).join('') + `<p class="small score-sum">Ministers ${side.tot - side.roll} + luck ${side.roll} = <b>${side.tot} response score</b></p>`;
+    return side.parts.map((part) => responsePart(part, cr)).join('') + relationExplanation(side)
+      + `<p class="small score-sum">Ministers ${side.parts.reduce((n, p) => n + p.v, 0)} ${side.rapport ? `· relationship ${signed(side.rapport)} ` : ''}+ luck ${side.roll} = <b>${side.tot} response score</b></p>`;
+  }
+  function relationExplanation(score) {
+    return (score.relations || []).map((r) => `<p class="small pair-relation"><b>Working relationship ${signed(r.v)}:</b> ${r.names.map(esc).join(' &amp; ')} · ${esc(r.note)}</p>`).join('');
   }
   function crisisSchedule(S, d) {
     return `<div class="crisis-schedule">${d.cards.map((ci, i) => {
@@ -454,9 +526,9 @@
       }
       const whose = mine(me) && app.role !== 'local' ? 'your' : `${pname(me)}'s`;
       body = `<div class="brief-steps">
-          ${step(1, 'Read three cards', 'All three crises are visible at the start of each duel. They show the primary and supporting skills, region and historical setting.')}
+          ${step(1, 'Choose your situations', 'Five different cards are dealt openly: two offers each and a neutral card. In turn, choose one of your two offers within 45 seconds. Your picks are played in choice order, then the neutral card. Read all three before sending ministers.')}
           ${step(2, 'Send two ministers', 'Take turns choosing two different cabinet members. Each minister can respond only once per duel, so save specialists for later. Choices are public; the first chooser alternates. You have 45 seconds, then the game chooses for you.')}
-          ${step(3, 'Skills lead the score', 'For each minister: 2 × primary skill + supporting skill. Their assigned ministry adds +3 for primary or +2 for support. Matching country adds +2, otherwise matching continent +1; matching era adds +1. Add both ministers and one luck roll of 0–2.')}
+          ${step(3, 'Skills lead the score', 'For each minister: 2 × primary skill + supporting skill. Their assigned ministry adds +3 for primary or +2 for support. Matching country adds +2, otherwise matching continent +1; matching era adds +1. Add both ministers, ±2 for a listed ally/rival pair in a relevant crisis, and one luck roll of 0–2.')}
           ${step(4, 'Win more crises', 'Higher response score wins each crisis; equal scores tie. More crisis wins takes the duel: 3 tournament points for a win, 1 each for a draw. Everyone is available again next duel.')}
         </div>
         <section class="panel example">
@@ -464,8 +536,9 @@
           <p><span class="ci">${ex.i}</span> <b>${esc(ex.n)}</b> · ${crisisSeats(ex)}</p>
           <p class="small">${crisisContext(ex)}. Country and continent bonuses do not stack.</p>
           ${best.parts.map((p) => responsePart(p, ex)).join('')}
-          <p><b>${best.tot} from the ministers + 0–2 luck = ${best.tot}–${best.tot + 2} response score.</b></p>
-          <p class="small">This is the strongest pair for this one card. Saving one of them for a later crisis may be wiser. Cabinet Power, chemistry and fame do not add to a crisis response. Response scores are separate from tournament points.</p>
+          ${relationExplanation(best)}
+          <p><b>${best.tot} from the ministers and any relevant relationship + 0–2 luck = ${best.tot}–${best.tot + 2} response score.</b></p>
+          <p class="small">This is the strongest pair for this one card. Saving one of them for a later crisis may be wiser. Whole-cabinet Power, its bonuses and fame do not add to a crisis response. Only a listed selected pair gets the separate relationship modifier. Response scores are separate from tournament points.</p>
         </section>
         <section class="panel cdeck-wrap">
           <h2>The crisis deck <small>${CC.CRISES.length} fictional scenarios</small></h2>
@@ -489,6 +562,23 @@
   }
 
   /* ---------- crisis decisions ---------- */
+  function vChoose() {
+    const S = app.S, d = S.duels[S.di], pid = S.choiceTurn;
+    const card = (ci, owner) => {
+      const c = CC.CRISES[ci], selected = owner && d.picks[owner] === ci;
+      return `<article class="cc offer-card ${selected ? 'selected' : ''}"><span class="ci">${c.i}</span><h3>${esc(c.n)}</h3><p>${esc(c.desc)}</p><small>${crisisSeats(c)}</small><small>${crisisContext(c)}</small>
+        ${!owner ? '<b>Third crisis · always played</b>' : selected ? '<b>✓ Chosen</b>' : d.picks[owner] != null ? '<small>Not chosen</small>' : owner === pid && mine(pid) ? `<button class="btn" data-a="chooseCrisis" data-ci="${ci}">Choose this crisis</button>` : '<small>Awaiting choice</small>'}</article>`;
+    };
+    return topbar(`Duel <b>${S.di + 1}</b> of ${S.duels.length}`) + `<main class="duel">
+      <h1 class="h1">Choose the situations</h1><p class="lead">${who(pid)}${mine(pid) ? ', choose one of your two offers.' : ' is choosing a crisis.'}</p>
+      <p>Each cabinet picks one card. Play both picks in choice order, then the neutral card. Save specialists: you will send two ministers per crisis, each usable only once this duel.</p>
+      <p class="small">All five cards and choices are public. The first chooser alternates between duels. At 45 seconds, the game chooses a card suited to your cabinet.</p>
+      <section class="panel choice-timer">${fuse(S)}</section>
+      <div class="offers">${[d.a, d.b].map((id) => `<section class="panel offer-owner ${id === pid ? 'current' : ''}"><h2>${who(id)}'s offers</h2><div class="offer-pair">${d.offers[id].map((ci) => card(ci, id)).join('')}</div></section>`).join('')}</div>
+      <section class="panel neutral-offer"><h2>Neutral situation</h2>${card(d.neutral, null)}</section>
+      ${cabs([d.a, d.b])}${standingsMini()}
+    </main>`;
+  }
   function responseDraft() {
     const S = app.S, key = `${S.di}:${S.crisisIndex}:${S.responseTurn}`;
     if (app.responseDraft.key !== key) app.responseDraft = { key, seats: [] };
@@ -519,7 +609,7 @@
         <small>${spent ? 'Already responded in this duel' : `Skills ${f.sk[cr.p]} × 2 + ${f.sk[cr.q]} = ${part.ability} · ministry +${part.portfolio} · geography +${part.geography} · era +${part.era}`}</small>
       </button>`;
     }).join('')}</div>
-    <div class="response-confirm" aria-live="polite"><p>${pair ? `<b>${pair.tot}–${pair.tot + 2}</b> response score, including 0–2 luck` : `Choose ${2 - selected.length} ${selected.length ? 'more minister' : 'ministers'}`}</p>
+    ${pair ? relationExplanation(pair) : ''}<div class="response-confirm" aria-live="polite"><p>${pair ? `<b>${pair.tot}–${pair.tot + 2}</b> response score, including ${pair.rapport ? `${signed(pair.rapport)} relationship and ` : ''}0–2 luck` : `Choose ${2 - selected.length} ${selected.length ? 'more minister' : 'ministers'}`}</p>
       <button class="btn" data-a="submitResponse" ${pair ? '' : 'disabled'}>Send these two →</button></div>` : `<p class="lead">Waiting for ${who(pid)} to choose two ministers…</p>`;
     return topbar(`Duel <b>${S.di + 1}</b> of ${S.duels.length} · crisis ${S.crisisIndex + 1}/3`) + `<main class="duel">
       <h1 class="h1">${pname(d.a)} vs ${pname(d.b)}</h1>
@@ -528,7 +618,7 @@
       <section class="panel response-panel" style="--c:${P(pid).color}">
         <h2>${cr.i} ${esc(cr.n)}</h2><p>${esc(cr.desc)}</p>
         <p><b>${crisisSeats(cr)}</b> · ${crisisContext(cr)}</p>
-        <p class="small">Per minister: relevant skills + assigned ministry (+3 primary / +2 support) + geography (country +2 or continent +1) + era (+1). One 0–2 luck roll for the pair.</p>
+        <p class="small">Per minister: relevant skills + assigned ministry (+3 primary / +2 support) + geography (country +2 or continent +1) + era (+1). A listed pair adds +2/−2 only in its relevant context, followed by one 0–2 luck roll.</p>
         <h3>${who(pid)}${canPick ? ', choose your response' : ' is responding'}</h3>
         ${controls}${fuse(S)}
         <p class="small">Choices are public; the first chooser alternates. At 45 seconds, the game selects a response while saving specialists for the remaining cards.</p>
@@ -629,6 +719,12 @@
     const S = app.S;
     return `<section class="mini-table" aria-label="Tournament standings"><small>Tournament points</small>${E.standings(S).map((r, i) => `<span>${i + 1}. ${who(r.p.id)} <b>${r.pts}</b></span>`).join('')}</section>`;
   }
+  function roomLeaderboard() {
+    const S = app.S, rows = E.roomStandings(S), games = S.room ? S.room.games : 0;
+    return `<section class="panel room-leaderboard"><h2>Room leaderboard <small>${games} ${games === 1 ? 'game' : 'games'} completed</small></h2>
+      <table class="table"><thead><tr><th>Player</th><th>Total points</th><th>Games won</th><th>Played</th></tr></thead><tbody>${rows.map((r) => `<tr><td><span class="dot" style="--c:${esc(r.color)}"></span> ${esc(r.name)}${r.active ? '' : ' <small>(left room)</small>'}</td><td><b>${r.pts}</b></td><td>${r.wins}</td><td>${r.games}</td></tr>`).join('')}</tbody></table>
+      <p class="small">Play again keeps these totals. Each completed game counts once; exact shared victories give every co-winner one win. Display order: total tournament points, then games won, then games played. Names order otherwise equal records. New players start at zero. This record lasts for this room session.</p></section>`;
+  }
 
   /* ---------- final ---------- */
   function vFinal() {
@@ -659,6 +755,7 @@
         ${punditPanel()}
       </div>
       ${cabs(st.map((r) => r.p.id), { cls: 'big' })}
+      ${roomLeaderboard()}
       <div class="start-row">${isAdmin() ? '<button class="btn big" data-a="again">Play again (same players)</button>' : '<p class="muted">The host can start another round.</p>'}<button class="btn ghost" data-a="home">Leave</button></div>
     </main>`;
   }
@@ -666,6 +763,7 @@
   /* ---------- render ---------- */
   function view() {
     if (app.view === 'home') return vHome();
+    if (app.view === 'reference') return vReference();
     if (app.view === 'connecting') return vConnecting();
     const S = app.S;
     if (!S) return vHome();
@@ -677,6 +775,7 @@
       case 'auction': case 'assign': case 'sold': v = vAuction(); break;
       case 'cabinets': v = vCabinets(); break;
       case 'briefing': v = vBriefing(); break;
+      case 'choose': v = vChoose(); break;
       case 'respond': v = vRespond(); break;
       case 'duel': v = vDuel(); break;
       case 'duelres': v = S.settings.judge === 'crisis' ? vDuel() : vDebate(); break;
@@ -766,6 +865,9 @@
   /* ---------- controller ---------- */
   function changed() {
     const S = app.S;
+    if (app.pundRequest && (app.pundRequest.state !== S || app.pundRequest.teams !== S.teams || S.phase === 'lobby')) {
+      app.pundRequest = null; app.pundBusy = false; app.pundProgress = ''; app.pundErr = '';
+    }
     S.v++;
     sfx();
     if (app.role === 'host') Net.broadcast(S);
@@ -808,7 +910,7 @@
     stopLoop();
     clearTimeout(app.joinTimer);
     Net.close();
-    Object.assign(app, { S: null, role: null, me: [], code: '', lost: false, netDown: false, tokens: {}, offset: 0, pundBusy: false, pundErr: '', sig: {}, responseDraft: { key: '', seats: [] } });
+    Object.assign(app, { S: null, role: null, me: [], code: '', lost: false, netDown: false, tokens: {}, offset: 0, pundBusy: false, pundErr: '', pundProgress: '', pundRequest: null, sig: {}, responseDraft: { key: '', seats: [] } });
   }
   function goHome(err) {
     teardown();
@@ -942,17 +1044,28 @@
     if (!S || app.pundBusy) return;
     app.pundErr = '';
     if (!useAI) { S.pundit = CC.Pundit.house(S); app.ptab = 'serious'; changed(); return; }
+    // Play again reuses S, so state identity alone cannot identify this game.
+    // Give the model a stable snapshot and let only this request update its UI.
+    const request = { state: S, teams: S.teams };
+    const current = () => app.pundRequest === request && app.S === S && S.teams === request.teams && S.phase !== 'lobby';
+    const snapshot = JSON.parse(JSON.stringify(S));
+    app.pundRequest = request;
     app.pundBusy = true;
     app.pundProgress = '';
     render();
     try {
-      const res = await CC.Pundit.askFree(S, (msg) => { app.pundProgress = msg; render(); });
-      if (app.S === S) { S.pundit = res; app.ptab = 'serious'; }
+      const res = await CC.Pundit.askFree(snapshot, (msg) => {
+        if (current()) { app.pundProgress = msg; render(); }
+      });
+      if (current()) { S.pundit = res; app.ptab = 'serious'; }
     } catch (e) {
-      app.pundErr = (e && e.message) || 'The pundit could not be reached.';
+      if (current()) app.pundErr = (e && e.message) || 'The pundit could not be reached.';
     } finally {
-      app.pundBusy = false;
-      if (app.S === S) changed();
+      if (app.pundRequest === request) {
+        const active = current();
+        app.pundRequest = null; app.pundBusy = false; app.pundProgress = '';
+        if (active) changed();
+      }
     }
   }
 
@@ -967,6 +1080,10 @@
     if (el.disabled) return;
     const a = el.dataset.a, S = app.S, st = S && S.settings;
     switch (a) {
+      case 'reference': app.view = 'reference'; app.modal = null; render(); window.scrollTo(0, 0); return;
+      case 'profile': app.profile = +el.dataset.id; app.modal = 'profile'; return render();
+      case 'resetReference': app.reference = { query: '', country: '', seat: '', sort: 'name', page: 0 }; return render();
+      case 'referencePage': app.reference.page = +el.dataset.page; return render();
       case 'solo': return startSolo();
       case 'local': return startLocal();
       case 'create': return createRoom();
@@ -1012,6 +1129,9 @@
       case 'bid': return dispatch(el.dataset.p, { t: 'bid', v: +el.dataset.v });
       case 'pass': return dispatch(el.dataset.p, { t: 'pass' });
       case 'seat': return dispatch(el.dataset.p, { t: 'seat', seat: +el.dataset.seat });
+      case 'chooseCrisis':
+        if (S.phase !== 'choose' || !mine(S.choiceTurn)) return;
+        return dispatch(S.choiceTurn, { t: 'chooseCrisis', ci: +el.dataset.ci });
       case 'chooseResponder': return toggleResponder(+el.dataset.seat);
       case 'submitResponse':
         if (S.phase !== 'respond' || !mine(S.responseTurn) || responseDraft().length !== 2) return;
@@ -1029,12 +1149,18 @@
     else if (t.id === 'jc') { t.value = t.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); app.joinCode = t.value; }
     else if (t.id === 'cs') { app.csearch = t.value; filterCountries(); }
     else if (t.id === 'hn') app.addName = t.value;
+    else if (t.id === 'rq') { app.reference.query = t.value; app.reference.page = 0; render(); }
+  });
+
+  document.addEventListener('change', (ev) => {
+    const key = { rc: 'country', rs: 'seat', ro: 'sort' }[ev.target.id];
+    if (key) { app.reference[key] = ev.target.value; app.reference.page = 0; render(); }
   });
 
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && app.modal) { app.modal = null; render(); return; }
     const t = ev.target;
-    if (t.tagName === 'INPUT') {
+    if (t.tagName === 'INPUT' || t.tagName === 'SELECT') {
       if (ev.key === 'Enter') {
         if (t.id === 'jc') joinRoom();
         else if (t.id === 'hn') document.querySelector('[data-a="addHuman"]').click();
@@ -1047,7 +1173,7 @@
     if (app.modal || ev.repeat) return;
     if (S.phase === 'auction' && S.teams[me]) {
       const cur = S.bid ? S.bid.v : 0, mx = E.maxBid(S, me);
-      const v = { 1: cur + 1, 2: cur + 2, 5: cur + 5, m: mx }[k];
+      const v = { 1: cur + 1, 2: cur + 2, 5: cur + 5, 0: cur + 10, m: mx }[k];
       if (v) { ev.preventDefault(); dispatch(me, { t: 'bid', v: Math.min(v, mx) }); }
       else if (k === 'p') dispatch(me, { t: 'pass' });
     } else if (S.phase === 'assign' && S.sold.by === me && /^[1-7]$/.test(k)) {

@@ -59,14 +59,14 @@
   // with one big JSON answer, so each cabinet gets its own call.
   const FREE_SYSTEM = `You are "The Pundit", a witty political commentator for Cabinet Clash, a party game where friends draft fantasy cabinets of real politicians from any era. You give a serious verdict and a good-natured roast.
 Only use the facts you are given plus very widely known facts. If you are not sure about something, joke about the seat fit, the mix of eras or the price paid instead.
+Judge role-specific effectiveness using the supplied skills, ministry assignments and explicit cooperation modifiers. These approximate game ratings are not moral approval or a claim of universal competence. Do not reward democracy, liberalism, personal virtue, authoritarianism or longevity in power as generic competence. Rights, public trust or legitimacy matter only when a particular crisis explicitly calls for them. The game fixes every numeric evaluation; you supply commentary and practical deployment advice, never a new score. Keep historical criticism distinct from mechanical competence and do not sanitize anyone's record.
 Keep the humour playful: never mock ethnicity, religion, gender, disability or appearance, never joke about atrocities or deaths, never invent crimes or quotes.
 Answer in English, using exactly the lines you are asked for. Each line is one or two short sentences.`;
 
-  const FORMAT = `Answer with exactly these four lines, filling in your own words:
-SCORE: <a number from 1.0 to 10.0 for how well this cabinet would govern>
+  const FORMAT = `Use the stated skills and modifiers to explain effectiveness, with no invented achievements or generic moral ranking. Answer with exactly these three lines, filling in your own words:
 HEADLINE: <a catchy title for this cabinet, 4 to 8 words>
-STRENGTH: <its biggest strength, naming the minister responsible>
-WEAKNESS: <its biggest weakness, naming the minister responsible>`;
+STRENGTH: <name a minister and their relevant skill, and explain which kind of crisis they suit>
+WEAKNESS: <name a minister's weaker relevant skill or an explicit cooperation problem, and give practical deployment advice>`;
 
   // The roast gets its own call with one line per seat, so every minister is covered.
   const SEAT_LABELS = { L: 'LEADER', E: 'ECONOMY', F: 'FOREIGN', I: 'INTERIOR', J: 'JUSTICE', D: 'DEFENCE', S: 'SOCIAL' };
@@ -92,15 +92,28 @@ ECONOMY: Mayor Bloggs balanced the city budget once, by selling the city hall cl
     const rows = CC.SEATS.map((s, i) => {
       const f = CC.pol(t.seats[i]);
       if (!f) return `- ${s.name}: empty`;
-      return `- ${s.name}: ${f.n} (${D.COUNTRIES[f.c].name}; ${f.r}; ${f.y}; era: ${CC.ERAS[f.e]}) — ${s.name} skill ${f.sk[s.k]}/9; seat score ${E.seatScore(t.seats[i], s.k)}${f.t === 1 ? ' including +1 fame' : ''}`;
+      return `- ${s.name}: ${f.n} (${D.COUNTRIES[f.c].name}; ${f.r}; ${f.y}; era: ${CC.ERAS[f.e]}) — ${s.name} skill ${f.sk[s.k]}/9; seat score ${E.seatScore(t.seats[i], s.k)}${f.t === 1 ? ' including +1 fame' : ''}; all skills: ${CC.SEATS.map((seat) => `${seat.name} ${f.sk[seat.k]}/9`).join(', ')}`;
     });
     const big = t.buys.filter((b) => !b.rnd).sort((a, b) => b.v - a.v)[0];
     const free = t.buys.filter((b) => b.fill && b.v === 0);
-    const notes = `\nCabinet power: ${E.power(t.seats)} (assigned skills, fame and chemistry; not tournament points). In crises, players choose two ministers per card; each minister can respond only once per duel. Each scores twice their primary crisis skill plus their support skill, with ministry, geographical and era bonuses. Add both scores and a single 0–2 luck bonus. Fame and cabinet chemistry do not score in crises.` +
+    const chemistry = E.chemistry(t.seats);
+    const names = t.seats.filter((fi) => fi != null).map((fi) => CC.pol(fi).n);
+    const relations = CC.RELATIONSHIPS.filter((r) => names.includes(r.a) && names.includes(r.b));
+    const notes = `\nCabinet power: ${E.power(t.seats)} (assigned skills, +1 for household-name fame, and the explicit modifiers below; not tournament points). Skills run from 1 to 9: Leader = government leadership; Economy = economic management; Foreign Affairs = diplomacy; Interior = domestic administration and security; Justice = legal/institutional work; Defence = strategy and military coordination; Social Affairs = health, education, welfare and public services. A high rating in one field does not imply skill in every field.` +
+      `\nCabinet modifiers: ${chemistry.length ? chemistry.map(modifierText).join('; ') : 'none'}. Shared country means shared background, not an automatic political alliance.` +
+      `\nListed pairs present: ${relations.length ? relations.map((r) => `${r.a} / ${r.b}: ${r.kind}, relevant only to ${r.skills.map((k) => CC.SEATS.find((s) => s.k === k).name).join('/')}; ${r.note}`).join(' | ') : 'none'}. Only relevant assignments activate cabinet rapport; only responding together to a relevant crisis activates response rapport.` +
+      `\nEach duelist chooses one of two public crisis cards; a neutral third card completes the duel. Players send two ministers per crisis, each minister only once per duel. Each minister scores 2 × primary skill + support skill, +3 for the primary ministry OR +2 for the support ministry, +2 for country OR +1 for continent, and +1 for era. Add both scores, a relevant listed pair's +2/−2 rapport if they respond together, and one 0–2 luck bonus. Pair rapport applies only when that crisis's primary/support skill matches the pair's listed fields. Fame and cabinet chemistry do not score again in crises.` +
       (free.length ? `\nFree random recruits after the auction: ${free.map((b) => CC.pol(b.f).n).join(', ')}. These cost zero credits; their ministries were chosen during placement.` : '');
     if (anonymous) return `The ministers:\n${rows.join('\n')}${notes}`;
     return `${p.name}'s cabinet${p.bot ? ' (a computer rival)' : ''}:\n${rows.join('\n')}` +
       (big ? `\n${p.name} paid the most for ${CC.pol(big.f).n}: ${big.v} credits.` : '') + notes;
+  }
+
+  const signed = (value) => value > 0 ? `+${value}` : String(value);
+  function modifierText(modifier) {
+    const detail = modifier.k === 'rapport' && modifier.detail
+      ? ` (${modifier.detail.map((r) => `${r.label} ${signed(r.v)} in ${r.context.map((k) => CC.SEATS.find((s) => s.k === k).name).join('/')}`).join('; ')}; combined cabinet rapport capped at −2 to +2)` : '';
+    return `${modifier.label} ${signed(modifier.v)}${detail}`;
   }
 
   function clip(v, max) {
@@ -131,8 +144,8 @@ ECONOMY: Mayor Bloggs balanced the city budget once, by selling the city hall cl
       const m = String(text).match(new RegExp('^[\\s*#>-]*' + k + '\\b[^:：\\n]{0,40}[:：]\\s*(.+)$', 'im'));
       if (!m) continue;
       const v = clip(m[1].replace(/^[\s"*]+|[\s"*]+$/g, ''), 240);
-      // Drop placeholders and junk like "None" or "0.0" (the score line is numeric on purpose).
-      if (k === 'SCORE' ? /\d/.test(v) : v.length >= 12 && !/[<>]/.test(v) && !/^(none|n\/a|unknown)\b/i.test(v)) out[k] = v;
+      // Drop placeholders and junk like "None" or "0.0". Model numbers are never scores.
+      if (v.length >= 12 && !/[<>]/.test(v) && !/^(none|n\/a|unknown)\b/i.test(v)) out[k] = v;
     }
     return out;
   }
@@ -172,28 +185,28 @@ ECONOMY: Mayor Bloggs balanced the city budget once, by selling the city hall cl
       throw new Error(/memory|device|lost/i.test(String(e && e.message)) ? 'Not enough graphics memory for the free AI on this device. Use the house pundit instead.' : (e && e.message) || 'The free AI failed to start.');
     }
     Pundit.lastRaw = [];
-    // The house verdict fills any line the model fumbles and steadies its scores.
+    // Both pundits use exactly the same mechanical evaluation. AI only writes
+    // commentary: even an unsolicited SCORE line cannot change the result.
     const house = Pundit.house(S);
     const serious = [], roast = [];
     let usable = 0;
     for (let i = 0; i < S.players.length; i++) {
       const p = S.players[i];
+      const h = house.serious.cabinets.find((c) => c.id === p.id), hr = house.roast.cabinets.find((c) => c.id === p.id);
       onProgress(`The pundit is judging ${p.name}'s cabinet… (${i + 1}/${S.players.length})`);
-      const text = await chat(got.engine, `Judge this cabinet:\n${cabinetBrief(S, p)}\n\n${FORMAT}`, 240);
-      const f = lines(text, ['SCORE', 'HEADLINE', 'STRENGTH', 'WEAKNESS']);
+      const text = await chat(got.engine, `Explain this cabinet's fixed mechanical rating of ${h.score.toFixed(1)}/10:\n${cabinetBrief(S, p)}\n\n${FORMAT}`, 240);
+      const f = lines(text, ['HEADLINE', 'STRENGTH', 'WEAKNESS']);
       onProgress(`The pundit is roasting ${p.name}'s cabinet… (${i + 1}/${S.players.length})`);
-      const raw = await chat(got.engine, roastFormat(S, p), 80 * (SEAT_KEYS.length + 1), 0.85);
+      const raw = await chat(got.engine, roastFormat(S, p), Math.max(700, 80 * (SEAT_KEYS.length + 1)), 0.85);
       let jokes = lines(raw, SEAT_KEYS.concat('OVERALL'));
       if (SEAT_KEYS.filter((k) => jokes[k]).length < Math.ceil(SEAT_KEYS.length / 2)) jokes = byPosition(raw);
       SEAT_KEYS.forEach((k, s) => { jokes[k] = goodJoke(jokes[k], CC.pol(S.teams[p.id].seats[s])); });
       jokes.OVERALL = oneLiner(jokes.OVERALL, 45);
-      const h = house.serious.cabinets.find((c) => c.id === p.id), hr = house.roast.cabinets.find((c) => c.id === p.id);
-      const ms = parseFloat(f.SCORE);
       const own = SEAT_KEYS.filter((k) => jokes[k]).length;
       if (f.HEADLINE && own >= 2) usable++;
       serious.push({
         id: p.id,
-        score: Math.round((Number.isFinite(ms) ? (Math.min(10, Math.max(1, ms)) + h.score) / 2 : h.score) * 10) / 10,
+        score: h.score,
         headline: f.HEADLINE || h.headline,
         strengths: f.STRENGTH || h.strengths,
         weaknesses: f.WEAKNESS || h.weaknesses,
@@ -369,11 +382,11 @@ ECONOMY: Mayor Bloggs balanced the city budget once, by selling the city hall cl
         strengths: (best.sc === worst.sc
           ? `Nobody stands out — every minister scores ${best.sc}`
           : `${best.f.n} at ${best.seat.name} is the anchor (skill ${best.f.sk[best.seat.k]}/9; seat score ${best.sc})`) +
-          (r.chem.length ? `; chemistry bonus: ${r.chem.map((c) => `${c.label} +${c.v}`).join(', ')}` : '') + '.',
+          (r.chem.length ? `; cabinet modifiers: ${r.chem.map(modifierText).join('; ')}` : '') + '.',
         weaknesses: worst.f.tags.includes(worst.seat.k)
           ? `Even the lowest seat score belongs to a strong fit: ${worst.f.n}, rated ${worst.f.sk[worst.seat.k]}/9 at ${worst.seat.name}.`
           : `${worst.f.n} is the softest spot at ${worst.seat.name}, rated ${worst.f.sk[worst.seat.k]}/9 — choose their crisis assignment carefully.`,
-        verdict: `${fits.length} of ${r.fs.length} ministers rate at least 7/9 in their assigned ministry, from ${countries} ${countries === 1 ? 'country' : 'countries'}. Cabinet power is a roster rating; tournament points come from winning duels.`,
+        verdict: `${fits.length} of ${r.fs.length} ministers rate at least 7/9 in their assigned ministry, from ${countries} ${countries === 1 ? 'country' : 'countries'}. This rating compares cabinet power and ministry fit; it does not rate political virtue. Tournament points come from duel results, not the pundit's score.`,
       };
     }).sort((a, b) => b.score - a.score);
 
@@ -428,7 +441,7 @@ ECONOMY: Mayor Bloggs balanced the city budget once, by selling the city hall cl
       source: 'house',
       phase: S.phase,
       serious: {
-        summary: `${top.p.name}'s cabinet leads on paper (power ${top.pow}); ${bottom.p.name}'s will need ${S.settings.judge === 'vote' ? 'a very persuasive speech' : 'clever crisis assignments and the right specialists'} (power ${bottom.pow}).`,
+        summary: `${top.p.name}'s cabinet leads the paper evaluation (power ${top.pow}); ${bottom.p.name}'s will need ${S.settings.judge === 'vote' ? 'a very persuasive speech' : 'clever crisis assignments and the right specialists'} (power ${bottom.pow}).`,
         cabinets: serious,
       },
       roast: {

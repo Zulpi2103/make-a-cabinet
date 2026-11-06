@@ -44,6 +44,18 @@
     { n: 'Health services under strain', i: '🩺', desc: 'A health emergency demands care, prevention, and effective local delivery.', p: 'S', q: 'I', e: 'm', c: 'CA' },
   ];
 
+  // These are narrow working relationships, not ideological or moral scores.
+  // Context keys are game-design inferences from the documented cooperation or
+  // conflict; family, country, and regime type never imply an alliance.
+  const RELATIONSHIPS = [
+    { a: 'Barack Obama', b: 'Joe Biden', kind: 'ally', skills: ['E', 'S'], note: 'Obama assigned Biden to oversee Recovery Act implementation.', source: 'https://obamawhitehouse.archives.gov/the-press-office/vice-president-biden-oversee-administrations-implementation-recovery-acts-provision' },
+    { a: 'Margaret Thatcher', b: 'Ronald Reagan', kind: 'ally', skills: ['F', 'D'], note: 'Established strategic cooperation, despite disagreements including Grenada.', source: 'https://www.margaretthatcher.org/archive/us-reagan' },
+    { a: 'Bill Clinton', b: 'Hillary Clinton', kind: 'ally', skills: ['S'], note: 'Worked together on health reform; established rapport does not imply that the unsuccessful 1993 plan succeeded.', source: 'https://www.clintonlibrary.gov/research/health-care-reform-topic-guide' },
+    { a: 'John F. Kennedy', b: 'Robert F. Kennedy', kind: 'ally', skills: ['F', 'J'], note: 'Worked together on crisis diplomacy and legal enforcement.', source: 'https://microsites.jfklibrary.org/cmc/oct23/doc1.html' },
+    { a: 'Donald Trump', b: 'Hillary Clinton', kind: 'rival', skills: ['L', 'J'], note: 'Direct presidential rivals with public disputes over leadership and prosecution.', source: 'https://www.debates.org/voter-education/debate-transcripts/october-9-2016-debate-transcript/' },
+    { a: 'Mikhail Gorbachev', b: 'Boris Yeltsin', kind: 'rival', skills: ['L', 'E', 'I'], note: 'Clashed over central authority and the pace of economic reform.', source: 'https://history.state.gov/milestones/1989-1992/collapse-soviet-union' },
+  ];
+
   const MODES = [
     { k: 'legends', name: 'Legends', icon: '🌟', desc: 'Only the most famous politicians in history.' },
     { k: 'world', name: 'World Stage', icon: '🌍', desc: 'Politicians from every corner of the planet.' },
@@ -89,14 +101,27 @@
     const f = pol(fi);
     return f ? (f.sk[k] || 0) + (f.t === 1 ? 1 : 0) : 0;
   }
+  function workingRelations(seats, crisis = null) {
+    const present = seats.map((fi, si) => fi == null ? null : { f: pol(fi), k: SK[si] }).filter(Boolean);
+    return RELATIONSHIPS.flatMap((r) => {
+      const a = present.find((x) => x.f.n === r.a), b = present.find((x) => x.f.n === r.b);
+      if (!a || !b) return [];
+      const keys = crisis ? [crisis.p, crisis.q] : [a.k, b.k];
+      const context = r.skills.filter((k) => keys.includes(k));
+      if (!context.length) return [];
+      return [Object.assign({}, r, { names: [r.a, r.b], label: `${r.a} & ${r.b}`, v: (r.kind === 'ally' ? 1 : -1) * (crisis ? 2 : 1), context })];
+    });
+  }
   function chemistry(seats) {
     const fs = seats.filter((x) => x != null).map(pol);
     const out = [];
+    const relations = workingRelations(seats);
+    if (relations.length) out.push({ k: 'rapport', label: 'Working relationships', v: Math.max(-2, Math.min(2, relations.reduce((sum, r) => sum + r.v, 0))), detail: relations });
     if (fs.length < 3) return out;
     const byC = {};
     fs.forEach((f) => (byC[f.c] = (byC[f.c] || 0) + 1));
     const [topC, n] = Object.entries(byC).sort((a, b) => b[1] - a[1])[0];
-    if (n >= 3) out.push({ k: 'home', label: `${D.COUNTRIES[topC].name} united`, v: Math.min(3, n - 2) });
+    if (n >= 3) out.push({ k: 'home', label: `${D.COUNTRIES[topC].name} shared context`, v: Math.min(3, n - 2) });
     const conts = new Set(fs.map((f) => D.COUNTRIES[f.c].cont)).size;
     if (conts >= 4) out.push({ k: 'global', label: 'Global coalition', v: 2 });
     if (fs.length === SEATS.length && new Set(fs.map((f) => f.e)).size === 1) out.push({ k: 'era', label: 'Era dream team', v: 2 });
@@ -128,10 +153,10 @@
   function newState(kind) {
     return {
       kind, v: 0, seq: 0, phase: 'lobby', settings: Object.assign({}, DEFAULTS),
-      players: [], teams: {}, scores: {}, rec: {},
+      players: [], teams: {}, scores: {}, rec: {}, room: { games: 0, rows: {} }, gameCounted: false,
       deck: [], discardPile: [], lot: 0, discUsed: 0, noDisc: false, filling: false, fillCursor: 0,
       cur: null, bid: null, passed: [], hist: [], deadline: 0, dur: 0, sold: null, log: [],
-      duels: [], di: -1, step: 0, crisisIndex: 0, responseTurn: null, ready: [], votes: {}, pundit: null,
+      duels: [], di: -1, step: 0, crisisIndex: 0, choiceTurn: null, responseTurn: null, ready: [], votes: {}, pundit: null,
     };
   }
   function addPlayer(S, o) {
@@ -139,7 +164,15 @@
     const color = COLORS.find((c) => !used.has(c)) || COLORS[S.players.length % COLORS.length];
     const p = { id: 'p' + ++S.seq, name: clean(o.name) || 'Player', color, bot: o.bot || null, persona: o.persona || null, off: false };
     S.players.push(p);
+    roomRow(S, p);
     return p;
+  }
+  function roomRow(S, p) {
+    if (!S.room) S.room = { games: 0, rows: {} };
+    if (!S.room.rows[p.id]) S.room.rows[p.id] = { name: p.name, color: p.color, pts: 0, wins: 0, games: 0 };
+    const row = S.room.rows[p.id];
+    row.name = p.name; row.color = p.color;
+    return row;
   }
   function addBot(S, level) {
     const used = S.players.map((p) => p.persona);
@@ -167,7 +200,7 @@
     if (S.kind === 'solo') S.settings.judge = 'crisis';
     Object.keys(mem).forEach((id) => delete mem[id]);
     S.deck = shuffle(poolFor(S.settings));
-    Object.assign(S, { discardPile: [], lot: 0, discUsed: 0, noDisc: false, filling: false, fillCursor: 0, responseTurn: null, log: [], duels: [], di: -1, pundit: null });
+    Object.assign(S, { discardPile: [], lot: 0, discUsed: 0, noDisc: false, filling: false, fillCursor: 0, choiceTurn: null, responseTurn: null, gameCounted: false, log: [], duels: [], di: -1, pundit: null });
     S.teams = {}; S.scores = {}; S.rec = {};
     S.players.forEach((p) => {
       S.teams[p.id] = { cr: S.settings.budget, seats: Array(SEATS.length).fill(null), buys: [] };
@@ -250,7 +283,8 @@
     let best = -1, bs = -1;
     t.seats.forEach((x, i) => {
       if (x != null) return;
-      const s = seatScore(fi, SK[i]);
+      const candidate = t.seats.slice(); candidate[i] = fi;
+      const s = seatScore(fi, SK[i]) + (chemTotal(candidate) - chemTotal(t.seats)) * 0.5;
       if (s > bs) { bs = s; best = i; }
     });
     return best;
@@ -297,7 +331,10 @@
       const era = f.e === cr.e ? 1 : 0;
       return { k, f: fi, seat: si, primary, support, ability, portfolio, geography, era, v: ability + portfolio + geography + era };
     });
-    return { parts, roll, tot: parts.reduce((sum, part) => sum + part.v, 0) + roll };
+    const deployed = team.seats.map((fi, si) => seats.includes(si) ? fi : null);
+    const relations = workingRelations(deployed, cr);
+    const rapport = relations.reduce((sum, r) => sum + r.v, 0);
+    return { parts, rapport, relations, roll, tot: parts.reduce((sum, part) => sum + part.v, 0) + rapport + roll };
   }
   function pairs(seats) {
     const out = [];
@@ -306,34 +343,82 @@
     }
     return out;
   }
-  function bestResponse(S, pid) {
-    const d = S.duels[S.di];
-    const available = SK.map((_, i) => i).filter((i) => !d.used[pid].includes(i));
-    // Only 630 full plans exist at the start of a duel. Reserve good specialists
-    // for later visible cards instead of greedily spending them on the first.
-    const memo = new Map();
+  function responsePlan(S, pid, cards, from = 0, available = SK.map((_, i) => i)) {
+    // Only 630 full plans exist for three cards and seven ministers. Cache both
+    // subplans and pair scores; the same planner powers choices and deployment.
+    const memo = new Map(), values = new Map();
     function plan(ci, remaining) {
-      if (ci >= d.cards.length) return { score: 0, pair: [] };
+      if (ci >= cards.length) return { score: 0, pair: [] };
       const key = ci + ':' + remaining.join(',');
       if (memo.has(key)) return memo.get(key);
       let best = { score: -Infinity, pair: [] };
       for (const pair of pairs(remaining)) {
-        const value = responseScore(S, pid, d.cards[ci], pair).tot;
+        const valueKey = cards[ci] + ':' + pair.join(',');
+        if (!values.has(valueKey)) values.set(valueKey, responseScore(S, pid, cards[ci], pair).tot);
         const future = plan(ci + 1, remaining.filter((i) => !pair.includes(i)));
-        const score = value + future.score;
+        const score = values.get(valueKey) + future.score;
         if (score > best.score) best = { score, pair };
       }
       memo.set(key, best);
       return best;
     }
-    return plan(S.crisisIndex, available).pair;
+    return plan(from, available);
+  }
+  function bestResponse(S, pid) {
+    const d = S.duels[S.di];
+    const available = SK.map((_, i) => i).filter((i) => !d.used[pid].includes(i));
+    return responsePlan(S, pid, d.cards, S.crisisIndex, available).pair;
+  }
+  function choiceOrder(S, d) { return S.di % 2 === 0 ? [d.a, d.b] : [d.b, d.a]; }
+  function bestCrisis(S, pid) {
+    const d = S.duels[S.di], other = pid === d.a ? d.b : d.a;
+    const possible = d.picks[other] == null ? d.offers[other] : [d.picks[other]];
+    let best = d.offers[pid][0], margin = -Infinity;
+    for (const ci of d.offers[pid]) {
+      // All offers are public. Plan all deployments, then allow for the opponent
+      // selecting whichever remaining offer leaves us the smaller advantage.
+      let worst = Infinity;
+      for (const oi of possible) {
+        const picks = { [pid]: ci, [other]: oi };
+        const cards = choiceOrder(S, d).map((id) => picks[id]).concat(d.neutral);
+        const own = responsePlan(S, pid, cards).score;
+        const rival = responsePlan(S, other, cards).score;
+        worst = Math.min(worst, own - rival);
+      }
+      if (worst > margin) { margin = worst; best = ci; }
+    }
+    return best;
   }
   function initCrisisDuel(S, d) {
-    d.cards = shuffle(CRISES.map((_, i) => i)).slice(0, 3);
+    const deal = shuffle(CRISES.map((_, i) => i)).slice(0, 5);
+    d.offers = { [d.a]: deal.slice(0, 2), [d.b]: deal.slice(2, 4) };
+    d.picks = { [d.a]: null, [d.b]: null };
+    d.neutral = deal[4]; d.cards = [];
     d.used = { [d.a]: [], [d.b]: [] };
     d.responses = { [d.a]: null, [d.b]: null };
     d.r = { crises: [], wa: 0, wb: 0, w: null };
-    S.crisisIndex = 0; S.step = 0;
+    S.crisisIndex = 0; S.step = 0; S.responseTurn = null;
+  }
+  function startChoices(S, now) {
+    S.choiceTurn = choiceOrder(S, S.duels[S.di])[0];
+    S.phase = 'choose';
+    setDeadline(S, now, RESPONSE_MS);
+  }
+  function chooseCrisis(S, pid, ci, now) {
+    if (S.phase !== 'choose' || S.choiceTurn !== pid) return false;
+    const d = S.duels[S.di];
+    if (!Number.isInteger(ci) || !d.offers[pid].includes(ci) || d.picks[pid] != null) return false;
+    d.picks[pid] = ci;
+    const other = pid === d.a ? d.b : d.a;
+    if (d.picks[other] == null) {
+      S.choiceTurn = other;
+      setDeadline(S, now, RESPONSE_MS);
+    } else {
+      d.cards = choiceOrder(S, d).map((id) => d.picks[id]).concat(d.neutral);
+      S.choiceTurn = null; S.crisisIndex = 0;
+      startCrisis(S, now);
+    }
+    return true;
   }
   function startCrisis(S, now) {
     const d = S.duels[S.di];
@@ -390,12 +475,16 @@
   function nextDuel(S, now) {
     for (;;) {
       S.di++;
-      if (S.di >= S.duels.length) { S.phase = 'final'; S.deadline = 0; return; }
+      if (S.di >= S.duels.length) { S.phase = 'final'; S.deadline = 0; finalizeRoomGame(S); return; }
       const d = S.duels[S.di];
       const botsOnly = isBot(S, d.a) && isBot(S, d.b);
       if (S.settings.judge === 'crisis') {
         initCrisisDuel(S, d);
+        startChoices(S, now);
         if (botsOnly) {
+          for (let turn = 0; turn < 2; turn++) {
+            const id = S.choiceTurn; chooseCrisis(S, id, bestCrisis(S, id), now);
+          }
           for (let ci = 0; ci < 3; ci++) {
             S.crisisIndex = ci;
             startCrisis(S, now);
@@ -405,7 +494,6 @@
           }
           applyResult(S, d, d.r.w); continue;
         }
-        startCrisis(S, now);
         return;
       }
       if (botsOnly) { d.r = { votes: {} }; applyResult(S, d, botJudge(S, d)); continue; }
@@ -485,6 +573,7 @@
         const p = player(S, a.id);
         if (!lobby || !p || !clean(a.name)) return false;
         p.name = clean(a.name);
+        roomRow(S, p);
         return true;
       }
       case 'botLevel': {
@@ -519,6 +608,8 @@
         if (!Number.isInteger(a.seat) || a.seat < 0 || a.seat >= SEATS.length || S.teams[pid].seats[a.seat] !== null) return false;
         place(S, a.seat, now);
         return true;
+      case 'chooseCrisis':
+        return chooseCrisis(S, pid, a.ci, now);
       case 'respond':
         return chooseResponse(S, pid, a.seats, now);
       case 'next':
@@ -559,6 +650,7 @@
       case 'auction': resolveLot(S, now); return true;
       case 'assign': place(S, -1, now); return true;
       case 'sold': nextLot(S, now); return true;
+      case 'choose': return chooseCrisis(S, S.choiceTurn, bestCrisis(S, S.choiceTurn), now);
       case 'respond': return chooseResponse(S, S.responseTurn, bestResponse(S, S.responseTurn), now);
       case 'duel': advanceCrisis(S, now); return true;
       case 'duelres': nextDuel(S, now); return true;
@@ -572,6 +664,26 @@
     return S.players
       .map((p) => ({ p, pts: S.scores[p.id] || 0, rec: S.rec[p.id], pow: power(S.teams[p.id].seats), cr: S.teams[p.id].cr }))
       .sort((a, b) => b.pts - a.pts || b.rec.cw - a.rec.cw || b.pow - a.pow || b.cr - a.cr);
+  }
+  function gameWinners(S) {
+    const rows = standings(S), top = rows[0];
+    return top ? rows.filter((r) => r.pts === top.pts && r.rec.cw === top.rec.cw && r.pow === top.pow && r.cr === top.cr).map((r) => r.p.id) : [];
+  }
+  function finalizeRoomGame(S) {
+    if (S.gameCounted) return;
+    const winners = gameWinners(S);
+    for (const p of S.players) {
+      const row = roomRow(S, p);
+      row.pts += S.scores[p.id] || 0;
+      row.games++;
+      if (winners.includes(p.id)) row.wins++;
+    }
+    S.room.games++;
+    S.gameCounted = true;
+  }
+  function roomStandings(S) {
+    return Object.entries((S.room || {}).rows || {}).map(([id, r]) => Object.assign({ id }, r, { active: !!player(S, id) }))
+      .sort((a, b) => b.pts - a.pts || b.wins - a.wins || b.games - a.games || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
   }
   function awards(S) {
     const buys = [];
@@ -602,11 +714,12 @@
     let best = 0;
     t.seats.forEach((x, i) => {
       if (x != null) return;
+      const candidate = t.seats.slice(); candidate[i] = fi;
       let s = seatScore(fi, SK[i]);
+      if (p.bot !== 'easy') s += (chemTotal(candidate) - chemTotal(t.seats)) * 0.5;
       if (per.fav === SK[i] && f.tags.includes(SK[i])) s += 1.5;
       best = Math.max(best, s);
     });
-    if (p.bot !== 'easy' && t.seats.filter((x) => x != null && pol(x).c === f.c).length >= 2) best += 1.5;
     if (per.fame && f.t === 1) best += 1.5;
     const perSeat = t.cr / fr;
     let val = perSeat * Math.pow(best / 8, 1.6) * per.aggr;
@@ -640,6 +753,10 @@
         const key = 'as' + S.lot;
         if (m.key !== key) { m.key = key; m.at = now + 700 + Math.random() * 700; }
         if (now >= m.at) out.push([p.id, { t: 'seat', seat: bestSeat(S, p.id, S.sold.f) }]);
+      } else if (S.phase === 'choose' && S.choiceTurn === p.id) {
+        const key = 'c' + S.di;
+        if (m.key !== key) { m.key = key; m.at = now + 900 + Math.random() * 900; }
+        if (now >= m.at) out.push([p.id, { t: 'chooseCrisis', ci: bestCrisis(S, p.id) }]);
       } else if (S.phase === 'respond' && S.responseTurn === p.id) {
         const key = 'r' + S.di + ':' + S.crisisIndex;
         if (m.key !== key) { m.key = key; m.at = now + 900 + Math.random() * 900; }
@@ -658,10 +775,11 @@
   }
 
   CC.SEATS = SEATS; CC.SK = SK; CC.CRISES = CRISES; CC.MODES = MODES; CC.ERAS = ERAS; CC.FAME = FAME; CC.MAXP = MAXP;
-  CC.pol = pol;
+  CC.pol = pol; CC.RELATIONSHIPS = RELATIONSHIPS;
   CC.Engine = {
     newState, addPlayer, addBot, act, tick, canStart, poolFor, minPool, free, maxBid, voters, player,
-    seatScore, chemistry, chemTotal, power, standings, awards, ADMIN, contenders, responseScore, bestResponse,
+    seatScore, chemistry, chemTotal, power, standings, awards, ADMIN, contenders, responseScore, bestResponse, bestCrisis,
+    workingRelations, gameWinners, roomStandings,
   };
   CC.Bots = { think };
 })();
