@@ -1,0 +1,45 @@
+name: Deploy Cabinet Clash to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - politics/index.html
+      - politics/css/**
+      - politics/js/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Prepare game website
+        run: |
+          mkdir _site
+          cp politics/index.html _site/
+          cp -R politics/css politics/js _site/
+          touch _site/.nojekyll
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - name: Publish website
+        id: deployment
+        uses: actions/deploy-pages@v4
